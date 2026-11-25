@@ -620,8 +620,10 @@ menu(){
   echo "10) 卸载服务和核心（保留配置）"
   echo "11) 彻底清理：删除节点、配置、二维码、链接及 hy2 命令"
   echo "12) 检查并更新管理器（从 GitHub 获取最新版本）"
+  echo "13) 查看 TLS / ACME 证书状态"
+  echo "14) 开机自启动设置"
   echo "0) 退出"
-  read -r -p "请选择 [0-12]: " choice
+  read -r -p "请选择 [0-14]: " choice
   case "$choice" in
     1) install_or_configure ;;
     2) update_core ;;
@@ -635,6 +637,8 @@ menu(){
     10) uninstall ;;
     11) purge_everything ;;
     12) update_manager ;;
+    13) certificate_status ;;
+    14) autostart_settings ;;
     0) exit 0 ;;
     *) die "无效选项" ;;
   esac
