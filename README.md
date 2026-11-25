@@ -1,6 +1,6 @@
 # Hysteria 2 Port-Hopping Manager
 
-**Version:** v1.4.2  
+**Version:** v1.4.3  
 **Platform:** Ubuntu 22.04 / 24.04 (Debian-based systems may work)
 
 A Bash-based interactive manager for deploying and maintaining a standalone Hysteria 2 port-hopping server. It is designed to coexist with S-UI/Xray and does not intentionally modify their configuration.
@@ -18,32 +18,22 @@ A Bash-based interactive manager for deploying and maintaining a standalone Hyst
 - Change outbound proxy settings without rebuilding the node.
 - Uninstall the service while retaining configuration, or perform a confirmed full cleanup.
 
-## Install
+## Quick start
 
-Run as root on a supported Ubuntu server:
+The repository is public. On a new Ubuntu VPS, run the following as root:
 
 ```bash
-bash hysteria2_port_hopping_manager_v1.4.2.sh
+bash <(curl -fsSL "https://raw.githubusercontent.com/Landman-Chio/hysteria2-port-hopping-manager-/main/hysteria2_port_hopping_manager.sh")
 ```
 
-The script installs required packages and the Hysteria binary when you select the install/configure menu item.
+The process-substitution launcher is supported. On first launch, the script installs a persistent copy at `/usr/local/sbin/hy2-manager` and creates `/usr/local/bin/hy2`. If you prefer a conventional local file:
 
-## Important notes
+```bash
+curl -fL "https://raw.githubusercontent.com/Landman-Chio/hysteria2-port-hopping-manager-/main/hysteria2_port_hopping_manager.sh" -o /root/hysteria2_port_hopping_manager.sh
+chmod +x /root/hysteria2_port_hopping_manager.sh
+bash /root/hysteria2_port_hopping_manager.sh
+```
 
-- Open the selected UDP port range in your cloud firewall/security group. If using Let's Encrypt HTTP-01, also allow inbound TCP port 80.
-- SOCKS5 UDP support depends on the upstream proxy provider. HTTP/HTTPS proxy mode is TCP-only and does not support UDP forwarding.
-- Generated share links and QR codes contain authentication credentials. Keep them private.
-- Verify client-side port-hopping interval support and settings for the client application you use.
-- The script requires root privileges for installation and service management.
+After installation, run `hy2` to open the manager. Menu item **12** checks GitHub for the latest manager version, validates the downloaded script with `bash -n`, backs up the current manager, and updates it. A manager update does not rebuild the Hysteria service configuration or node.
 
-## Menu
-
-Run the script and follow the interactive menu. The menu includes installation/configuration, core updates, status/log viewing, restart, backup, client artifact regeneration, link display, outbound proxy changes, uninstall, and full cleanup.
-
-## Validation
-
-The v1.4.2 script passed a local `bash -n` syntax check before publication. This is not a substitute for a full deployment test on your own VPS, network, certificate, and upstream proxy.
-
-## License
-
-No license file is included yet. All rights are reserved by default unless the author adds a license.
+Versioned release file: [hysteria2_port_hopping_manager_v1.4.3.sh](hysteria2_port_hopping_manager_v1.4.3.sh)
