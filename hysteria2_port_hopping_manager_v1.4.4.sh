@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Hysteria 2 Port-Hopping Manager v1.4.2
+# Hysteria 2 Port-Hopping Manager v1.4.4
 # Ubuntu 22.04/24.04. Dedicated service; does not modify S-UI/Xray.
 set -Eeuo pipefail
 VERSION="1.4.4"
