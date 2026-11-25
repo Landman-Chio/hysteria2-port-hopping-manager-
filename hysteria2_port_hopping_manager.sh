@@ -497,13 +497,15 @@ certificate_status(){
   echo "最近 ACME 日志："
   journalctl -u "$SERVICE" --since "30 days ago" --no-pager 2>/dev/null | grep -Ei 'acme|certificate|certmagic|renew|obtaining|obtained|challenge|error' | tail -n 60 || true
 }
-\nupdate_core(){
+
+update_core(){
   need_root; install_deps; install_binary
   if systemctl is-active --quiet "$SERVICE"; then systemctl restart "$SERVICE"; info "核心已更新并重启。"; else info "核心已更新，服务当前未运行。"; fi
 }
 status(){ systemctl --no-pager --full status "$SERVICE" || true; }
 logs(){ journalctl -u "$SERVICE" -n 100 --no-pager || true; }
-restart(){ need_root; systemctl restart "$SERVICE"; systemctl --no-pager --full status "$SERVICE" || true; }\nautostart_settings(){
+restart(){ need_root; systemctl restart "$SERVICE"; systemctl --no-pager --full status "$SERVICE" || true; }
+autostart_settings(){
   need_root
   echo "========== 开机自启动设置 =========="
   if systemctl is-enabled --quiet "$SERVICE"; then echo "当前状态：已启用"; else echo "当前状态：未启用"; fi
