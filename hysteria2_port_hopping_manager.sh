@@ -2,7 +2,7 @@
 # Hysteria 2 Port-Hopping Manager v1.4.2
 # Ubuntu 22.04/24.04. Dedicated service; does not modify S-UI/Xray.
 set -Eeuo pipefail
-VERSION="1.4.3"
+VERSION="1.4.4"
 REPO_RAW_URL="https://raw.githubusercontent.com/Landman-Chio/hysteria2-port-hopping-manager-/main/hysteria2_port_hopping_manager.sh"
 DOWNLOAD_TIMEOUT=30
 SERVICE="hysteria2-hop"
@@ -457,13 +457,70 @@ update_manager(){
   echo "正在重新启动新版管理器..."
   exec "$MANAGER"
 }
-update_core(){
+certificate_status(){
+  need_root
+  echo "========== Hysteria 2 证书状态 =========="
+  if ! grep -q '^acme:' "$CONFIG"; then
+    info "当前配置不是 Hysteria 内置 ACME 模式。"
+    return 0
+  fi
+  local domain acme_dir cert expiry epoch days now found d
+  domain="$(awk '/^acme:/{a=1;next} a && /^[^ ]/{a=0} a && /- /{sub(/.*- /,""); gsub(/"/,""); print; exit}' "$CONFIG")"
+  acme_dir="$(awk '/^acme:/{a=1;next} a && /^[^ ]/{a=0} a && /dir:/{sub(/.*dir:[ ]*/,""); gsub(/"/,""); print; exit}' "$CONFIG")"
+  if [[ -z "$domain" ]]; then warn "无法识别 ACME 域名"; return 1; fi
+  if [[ -z "$acme_dir" ]]; then acme_dir="/acme"; fi
+  echo "证书域名：$domain"
+  echo "ACME 数据目录：$acme_dir"
+  if systemctl is-active --quiet "$SERVICE"; then info "Hysteria 服务正在运行"; else warn "服务未运行，自动续期无法由运行中的服务执行"; fi
+  found="no"
+  for d in "$acme_dir" /acme "$BASE/acme" /root/acme; do
+    [[ -d "$d" ]] || continue
+    while IFS= read -r -d '' cert; do
+      if openssl x509 -in "$cert" -noout -checkhost "$domain" >/dev/null 2>&1; then
+        expiry="$(openssl x509 -in "$cert" -noout -enddate 2>/dev/null | cut -d= -f2-)"
+        epoch="$(date -d "$expiry" +%s 2>/dev/null || true)"
+        [[ -n "$epoch" ]] || continue
+        now="$(date +%s)"
+        days=$(( (epoch-now)/86400 ))
+        echo "证书文件：$cert"
+        echo "到期时间：$expiry"
+        if (( days < 0 )); then warn "证书已过期"
+        elif (( days <= 14 )); then warn "证书剩余 $days 天，请检查续期日志"
+        else info "证书剩余 $days 天"
+        fi
+        found="yes"
+        break 2
+      fi
+    done < <(find "$d" -type f -name '*.crt' -print0 2>/dev/null)
+  done
+  if [[ "$found" != "yes" ]]; then warn "常见 ACME 目录中未找到匹配的 .crt 证书文件；请结合日志检查。"; fi
+  echo "最近 ACME 日志："
+  journalctl -u "$SERVICE" --since "30 days ago" --no-pager 2>/dev/null | grep -Ei 'acme|certificate|certmagic|renew|obtaining|obtained|challenge|error' | tail -n 60 || true
+}
+\nupdate_core(){
   need_root; install_deps; install_binary
   if systemctl is-active --quiet "$SERVICE"; then systemctl restart "$SERVICE"; info "核心已更新并重启。"; else info "核心已更新，服务当前未运行。"; fi
 }
 status(){ systemctl --no-pager --full status "$SERVICE" || true; }
 logs(){ journalctl -u "$SERVICE" -n 100 --no-pager || true; }
-restart(){ need_root; systemctl restart "$SERVICE"; systemctl --no-pager --full status "$SERVICE" || true; }
+restart(){ need_root; systemctl restart "$SERVICE"; systemctl --no-pager --full status "$SERVICE" || true; }\nautostart_settings(){
+  need_root
+  echo "========== 开机自启动设置 =========="
+  if systemctl is-enabled --quiet "$SERVICE"; then echo "当前状态：已启用"; else echo "当前状态：未启用"; fi
+  echo "1) 启用开机自启动"
+  echo "2) 禁用开机自启动（不停止当前服务）"
+  echo "3) 查看服务状态"
+  echo "0) 返回"
+  read -r -p "请选择 [0-3]: " choice
+  case "$choice" in
+    1) systemctl enable "$SERVICE" && info "已启用开机自启动" ;;
+    2) systemctl disable "$SERVICE" && info "已禁用开机自启动；当前服务不会停止" ;;
+    3) systemctl is-enabled "$SERVICE" 2>/dev/null || true; systemctl is-active "$SERVICE" 2>/dev/null || true ;;
+    0) return 0 ;;
+    *) warn "无效选项" ;;
+  esac
+}
+
 change_outbound(){
   need_root
   [[ -s "$CONFIG" ]] || die "未找到服务端配置：$CONFIG"
