@@ -1,6 +1,6 @@
 # Hysteria 2 Port-Hopping Manager
 
-**Version:** v1.4.3  
+**Version: v1.4.4
 **Platform:** Ubuntu 22.04 / 24.04 (Debian-based systems may work)
 
 A Bash-based interactive manager for deploying and maintaining a standalone Hysteria 2 port-hopping server. It is designed to coexist with S-UI/Xray and does not intentionally modify their configuration.
@@ -37,3 +37,16 @@ bash /root/hysteria2_port_hopping_manager.sh
 After installation, run `hy2` to open the manager. Menu item **12** checks GitHub for the latest manager version, validates the downloaded script with `bash -n`, backs up the current manager, and updates it. A manager update does not rebuild the Hysteria service configuration or node.
 
 Versioned release file: [hysteria2_port_hopping_manager_v1.4.3.sh](hysteria2_port_hopping_manager_v1.4.3.sh)
+
+
+## v1.4.4 additions
+
+- Certificate status menu: inspect ACME mode, domain, likely certificate storage locations, certificate expiry (when the certificate file is discoverable), and recent ACME-related service logs.
+- Boot autostart menu: enable or disable systemd startup at boot without stopping the currently running service.
+- Existing installation behavior continues to enable the Hysteria systemd service during deployment.
+
+Run the stable manager from the public repository:
+
+```bash
+bash <(curl -fsSL "https://raw.githubusercontent.com/Landman-Chio/hysteria2-port-hopping-manager-/main/hysteria2_port_hopping_manager.sh")
+```
