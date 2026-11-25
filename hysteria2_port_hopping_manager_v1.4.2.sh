@@ -2,7 +2,9 @@
 # Hysteria 2 Port-Hopping Manager v1.4.2
 # Ubuntu 22.04/24.04. Dedicated service; does not modify S-UI/Xray.
 set -Eeuo pipefail
-VERSION="1.4.2"
+VERSION="1.4.3"
+REPO_RAW_URL="https://raw.githubusercontent.com/Landman-Chio/hysteria2-port-hopping-manager-/main/hysteria2_port_hopping_manager.sh"
+DOWNLOAD_TIMEOUT=30
 SERVICE="hysteria2-hop"
 BASE="/etc/hysteria2-hop"
 CONFIG="$BASE/config.yaml"
@@ -49,18 +51,30 @@ backup_old(){
 }
 install_shortcut(){
   need_root
-  [[ -f "$SCRIPT_SOURCE" ]] || die "找不到当前脚本文件，无法安装 hy2 命令"
+  local source_path tmp
+  source_path="${BASH_SOURCE[0]:-$SCRIPT_SOURCE}"
 
-  # 当用户通过 hy2 启动时，SCRIPT_SOURCE 解析后就是 MANAGER 本身。
-  # install 同一文件到自身会报错并可能中断整个安装流程，因此先比较文件实体。
-  if [[ -e "$MANAGER" && "$SCRIPT_SOURCE" -ef "$MANAGER" ]]; then
-    chmod 0755 "$MANAGER"
+  # bash <(curl ...) uses a transient /dev/fd source. Fetch a durable copy.
+  if [[ -f "$source_path" && -r "$source_path" && "$source_path" != /dev/fd/* ]]; then
+    source_path="$(readlink -f "$source_path" 2>/dev/null || printf '%s' "$source_path")"
+    if [[ -e "$MANAGER" && "$source_path" -ef "$MANAGER" ]]; then
+      chmod 0755 "$MANAGER"
+    else
+      install -D -m 0755 "$source_path" "$MANAGER"
+    fi
   else
-    install -D -m 0755 "$SCRIPT_SOURCE" "$MANAGER"
+    tmp="$(mktemp)"
+    if ! curl -fL --retry 3 --connect-timeout 10 --max-time "$DOWNLOAD_TIMEOUT" "$REPO_RAW_URL" -o "$tmp"; then
+      rm -f "$tmp"
+      die "当前通过在线管道启动，且无法从 GitHub 下载管理器；请检查网络或手动下载脚本"
+    fi
+    bash -n "$tmp" || { rm -f "$tmp"; die "GitHub 下载的管理器语法检查失败，拒绝安装"; }
+    install -D -m 0755 "$tmp" "$MANAGER"
+    rm -f "$tmp"
   fi
 
   ln -sfn "$MANAGER" "$COMMAND"
-  info "控制面板命令已安装：输入 hy2 即可打开管理菜单"
+  info "管理器已安装：输入 hy2 即可打开菜单"
 }
 remove_shortcut(){
   rm -f "$COMMAND" "$MANAGER"
@@ -400,6 +414,49 @@ install_or_configure(){
   warn "Hysteria 分享 URI 支持多端口范围，但跳跃间隔需在客户端配置中设置；分享 URI 不包含客户端本地 hopInterval。"
   warn "请在云厂商安全组放行 UDP ${pstart}-${pend}；使用 ACME HTTP-01 时还需放行 TCP 80。"
 }
+update_manager(){
+  need_root
+  local tmp remote_version backup_file
+  tmp="$(mktemp)"
+  info "正在检查 GitHub 上的管理器版本..."
+  if ! curl -fL --retry 3 --connect-timeout 10 --max-time "$DOWNLOAD_TIMEOUT" "$REPO_RAW_URL" -o "$tmp"; then
+    rm -f "$tmp"
+    die "无法从 GitHub 获取最新脚本，请检查 VPS 网络连接"
+  fi
+  if ! bash -n "$tmp"; then
+    rm -f "$tmp"
+    die "远程脚本未通过 bash -n 检查，已取消更新"
+  fi
+  remote_version="$(sed -n 's/^VERSION="\([0-9][0-9.]*\)"$/\1/p' "$tmp" | head -n1)"
+  [[ -n "$remote_version" ]] || { rm -f "$tmp"; die "无法识别远程脚本版本号，已取消更新"; }
+
+  echo "当前运行版本：v$VERSION"
+  echo "GitHub 最新版本：v$remote_version"
+  if [[ "$remote_version" == "$VERSION" ]]; then
+    rm -f "$tmp"
+    info "当前已经是 GitHub 上的最新版本。"
+    return 0
+  fi
+
+  if [[ "$(printf '%s\n%s\n' "$VERSION" "$remote_version" | sort -V | tail -n1)" != "$remote_version" ]]; then
+    rm -f "$tmp"
+    warn "远程版本低于当前版本，不执行降级。"
+    return 0
+  fi
+
+  mkdir -p "$(dirname "$MANAGER")"
+  if [[ -f "$MANAGER" ]]; then
+    backup_file="${MANAGER}.bak.$(date +%Y%m%d-%H%M%S)"
+    cp -a "$MANAGER" "$backup_file"
+    info "旧管理器已备份：$backup_file"
+  fi
+  install -m 0755 "$tmp" "$MANAGER"
+  rm -f "$tmp"
+  ln -sfn "$MANAGER" "$COMMAND"
+  info "管理器已更新到 v$remote_version。"
+  echo "正在重新启动新版管理器..."
+  exec "$MANAGER"
+}
 update_core(){
   need_root; install_deps; install_binary
   if systemctl is-active --quiet "$SERVICE"; then systemctl restart "$SERVICE"; info "核心已更新并重启。"; else info "核心已更新，服务当前未运行。"; fi
@@ -488,8 +545,8 @@ uninstall(){
   warn "如需连配置、二维码、节点链接及 hy2 命令一起删除，请使用菜单 9「彻底清理」。"
 }
 menu(){
-  if [[ $EUID -eq 0 && -f "$SCRIPT_SOURCE" ]]; then
-    install_shortcut >/dev/null 2>&1 || true
+  if [[ $EUID -eq 0 ]]; then
+    install_shortcut >/dev/null 2>&1 || warn "未能安装 hy2 快捷命令；当前菜单仍可继续使用。"
   fi
   echo "=================================================="
   echo " Hysteria 2 Port-Hopping Manager v${VERSION}"
@@ -505,8 +562,9 @@ menu(){
   echo "9) 修改 SOCKS5 / HTTP 出站代理（不重建节点）"
   echo "10) 卸载服务和核心（保留配置）"
   echo "11) 彻底清理：删除节点、配置、二维码、链接及 hy2 命令"
+  echo "12) 检查并更新管理器（从 GitHub 获取最新版本）"
   echo "0) 退出"
-  read -r -p "请选择 [0-11]: " choice
+  read -r -p "请选择 [0-12]: " choice
   case "$choice" in
     1) install_or_configure ;;
     2) update_core ;;
@@ -519,6 +577,7 @@ menu(){
     9) change_outbound ;;
     10) uninstall ;;
     11) purge_everything ;;
+    12) update_manager ;;
     0) exit 0 ;;
     *) die "无效选项" ;;
   esac
