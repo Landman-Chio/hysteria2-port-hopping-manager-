@@ -3,7 +3,7 @@
 # Ubuntu 22.04/24.04. Dedicated service; does not modify S-UI/Xray.
 set -Eeuo pipefail
 VERSION="1.4.4"
-REPO_RAW_URL="https://raw.githubusercontent.com/Landman-Chio/hysteria2-port-hopping-manager-/main/hysteria2_port_hopping_manager.sh"
+REPO_RAW_URL="https://raw.githubusercontent.com/Landman-Chio/hysteria2-port-hopping-manager-/main/hysteria2_port_hopping_manager.sh?v=1.4.4-fix2"
 DOWNLOAD_TIMEOUT=30
 SERVICE="hysteria2-hop"
 BASE="/etc/hysteria2-hop"
